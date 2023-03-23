@@ -1,28 +1,41 @@
 package main
 
-type OrderBook struct{
-  instruments map[string]chan input
-  input_chan chan input
+type OrderBook struct {
+	inputChan chan ClientOrder
+	instChans map[string]chan input
 }
 
-func (ob *OrderBook) ensureInstrumentExists(inst string) {
-  _, ok := ob.instruments[inst]
-  if !ok {
-    inst_ch := make(chan input)
+func (ob *OrderBook) ensureInstrumentExists(inst string) chan input {
+	instChan, ok := ob.instChans[inst]
+	if !ok {
+		instChan = makeInstrument()
+		ob.instChans[inst] = instChan
+	}
+	return instChan
+}
 
-    // instrument := Instrument{inst_ch}
-    //go instrument.runInstrument(ob.input_chan)
-
-    ob.instruments[inst] = inst_ch
-  }
+func (ob *OrderBook) handleOrder(in input, doneChan chan struct{}) {
+	instChan := ob.ensureInstrumentExists(in.instrument)
+	switch in.orderType {
+	case inputBuy:
+		instChan <- in
+	case inputSell:
+		instChan <- in
+	case inputCancel:
+		instChan <- in
+	}
 }
 
 func (ob *OrderBook) runOrderBook() {
-  for in := range ob.input_chan{
-    ob.ensureInstrumentExists(in.instrument)
+	for {
+		select {
+		case order := <-ob.inputChan:
+			ob.handleOrder(order.in, order.doneChan)
+		}
+	}
+}
 
-    inst_ch := ob.instruments[in.instrument]
-
-    inst_ch<-in
-  }
+func makeOrderBook(inputChan chan ClientOrder) {
+	ob := OrderBook{inputChan: inputChan, instChans: make(map[string]chan input)}
+	go ob.runOrderBook()
 }

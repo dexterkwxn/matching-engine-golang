@@ -7,27 +7,28 @@ import (
 	"io"
 	"net"
 	"os"
-	"time"
 )
 
-type Engine struct{
-  order_book OrderBook
+type ClientOrder struct {
+	in       input
+	doneChan chan struct{}
 }
 
+type Engine struct {
+	inputChan chan ClientOrder
+}
 
 func (e *Engine) accept(ctx context.Context, conn net.Conn) {
 	go func() {
 		<-ctx.Done()
 		conn.Close()
 	}()
-  if e == nil {
-    ob := startOrderBook()
-    e.order_book = ob
-  }
-	go handleConn(conn, e.order_book.input_chan)
+	go handleConn(conn, e.inputChan)
 }
 
-func handleConn(conn net.Conn, input_chan chan input) {
+func handleConn(conn net.Conn, inputChan chan ClientOrder) {
+	doneChan := make(chan struct{})
+
 	defer conn.Close()
 	for {
 		in, err := readInput(conn)
@@ -37,20 +38,15 @@ func handleConn(conn net.Conn, input_chan chan input) {
 			}
 			return
 		}
-		switch in.orderType {
-    
-		case inputCancel:
-			fmt.Fprintf(os.Stderr, "Got cancel ID: %v\n", in.orderId)
-			outputOrderDeleted(in, true, GetCurrentTimestamp())
-		default:
-			fmt.Fprintf(os.Stderr, "Got order: %c %v x %v @ %v ID: %v\n",
-				in.orderType, in.instrument, in.count, in.price, in.orderId)
-			outputOrderAdded(in, GetCurrentTimestamp())
-		}
-		outputOrderExecuted(123, 124, 1, 2000, 10, GetCurrentTimestamp())
+		inputChan <- ClientOrder{in: in, doneChan: doneChan}
+		<-doneChan
 	}
 }
 
-func GetCurrentTimestamp() int64 {
-	return time.Now().UnixNano()
+func makeEngine() Engine {
+	e := Engine{
+		inputChan: make(chan ClientOrder),
+	}
+	makeOrderBook(e.inputChan)
+	return e
 }
