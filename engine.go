@@ -21,7 +21,8 @@ func (e *Engine) accept(ctx context.Context, conn net.Conn) {
 		conn.Close()
 	}()
   if e == nil {
-    ob := startOrderBook()
+    ob := OrderBook{instruments: make(map[string]chan input), input_chan: make(chan input)}
+    go ob.runOrderBook()
     e.order_book = ob
   }
 	go handleConn(conn, e.order_book.input_chan)
