@@ -8,6 +8,7 @@ type Order struct {
 	price       uint32
 	executionId uint32
 	isSell      bool
+  isCancel    bool
 }
 
 type Instrument struct {
@@ -20,6 +21,7 @@ type Instrument struct {
 	sellAddChan   chan Order
 	reconChan     chan Order
 	doneChans     map[uint32]chan struct{}
+  orderMap      map[uint32]int // 0 = buy, 1 = sell
 }
 
 func (instmt *Instrument) runInstrument() {
@@ -33,10 +35,20 @@ func (instmt *Instrument) runInstrument() {
 			in := clientOrder.in
 			instmt.doneChans[in.orderId] = clientOrder.doneChan
 			if in.orderType == inputBuy {
+        instmt.orderMap[in.orderId] = 0
 				instmt.sellMatchChan <- Order{id: in.orderId, count: in.count, price: in.price, executionId: 0, isSell: false}
 			} else if in.orderType == inputSell {
+        instmt.orderMap[in.orderId] = 1
 				instmt.buyMatchChan <- Order{id: in.orderId, count: in.count, price: in.price, executionId: 0, isSell: true}
-			}
+			} else if in.orderType == inputCancel {
+        if (instmt.orderMap[in.orderId] == 0) {
+          // idk if we need to change isSell to OrderType instead to detect cancel order 
+          // maybe this will work?
+          instmt.sellMatchChan <- Order{id: in.orderId, isCancel: true} 
+        } else {
+          instmt.buyMatchChan <- Order{id: in.orderId, isCancel: true}
+        }
+      }
 		}
 	}
 }
@@ -47,6 +59,10 @@ func (instmt *Instrument) runSellWorker() {
 	for {
 		select {
 		case activeOrder := <-instmt.sellMatchChan:
+      if activeOrder.isCancel {
+        // not sure how to find the order and delete from priority queue
+        continue
+      }
 			for {
 				if activeOrder.count == 0 || len(restingSells) == 0 || restingSells[0].value.price > activeOrder.price {
 					break
@@ -149,13 +165,14 @@ func makeInstrument(outputChan chan string, name string) chan ClientOrder {
 	instrument := Instrument{
 		name:          name,
 		inputChan:     make(chan ClientOrder),
-		buyMatchChan:  make(chan Order),
-		buyAddChan:    make(chan Order),
-		sellMatchChan: make(chan Order),
-		sellAddChan:   make(chan Order),
-		reconChan:     make(chan Order),
+		buyMatchChan:  make(chan Order, 1),
+		buyAddChan:    make(chan Order, 1),
+		sellMatchChan: make(chan Order, 1),
+		sellAddChan:   make(chan Order, 1),
+		reconChan:     make(chan Order, 2),
 		outputChan:    outputChan,
 		doneChans:     make(map[uint32]chan struct{}),
+    orderMap:      make(map[uint32]int),
 	}
 	go instrument.runInstrument()
 	return instrument.inputChan
