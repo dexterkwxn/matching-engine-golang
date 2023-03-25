@@ -86,16 +86,14 @@ func outputOrderDeleted(in input, accepted bool, outTime int64) {
 		in.orderId, acceptedTxt, outTime)
 }
 
-func outputOrderAdded(in input, outTime int64) {
-	orderType := "S"
-	if in.orderType == inputBuy {
-		orderType = "B"
+func fmtOrderAdded(order Order, instrument string) string {
+	orderType := "B"
+	if order.isSell {
+		orderType = "S"
 	}
-	fmt.Printf("%v %v %v %v %v %v\n",
-		orderType, in.orderId, in.instrument, in.price, in.count, outTime)
+	return fmt.Sprintf("%v %v %v %v %v", orderType, order.id, instrument, order.price, order.count)
 }
 
-func outputOrderExecuted(restingId, newId, execId, price, count uint32, outTime int64) {
-	fmt.Printf("E %v %v %v %v %v %v\n",
-		restingId, newId, execId, price, count, outTime)
+func fmtOrderExecuted(restingId, newId, execId, price, count uint32) string {
+	return fmt.Sprintf("E %v %v %v %v %v", restingId, newId, execId, price, count)
 }
