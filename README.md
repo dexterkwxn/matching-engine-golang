@@ -5,7 +5,7 @@ The goal of this assignment was to design an exchange matching engine that would
 
 The design we settled on is shown as follows:
 
-![image]("program_design.jpeg")
+![image](program_design.jpeg)
 
 The arrows represent channels and the circles represent goroutines. The capacity of the channels are noted with underlined numbers.
 A more detailed explanation is written in the report
